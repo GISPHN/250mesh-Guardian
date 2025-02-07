@@ -49,17 +49,19 @@
   <div id="map"></div>
   
   <script>
-    // MapLibre の初期化（OSMbright スタイルを利用）
+    // MapLibre の初期化
     const map = new maplibregl.Map({
       container: 'map',
       // OSMbright のスタイルURL（CDN版）
       style: 'https://openmaptiles.github.io/osm-bright-gl-style/style-cdn.json',
+      // ※ もしこちらで地図が表示されない場合、一時的に以下に切り替えてテストしてください：
+      // style: 'https://demotiles.maplibre.org/style.json',
       center: [139.6917, 35.6895],
       zoom: 10
     });
     
     // GeoJSON のパス（実際のパスに合わせてください）
-    const municipalityUrl = 'municipalities.geojson'; // 自治体境界の GeoJSON
+    const municipalityUrl = 'municipalities.geojson';  // 自治体境界の GeoJSON
     const meshDataUrl = 'pop_Osakacity_yodogawku.geojson'; // 人口データファイル
     
     // グローバル変数
@@ -119,7 +121,6 @@
         map.removeSource('meshes');
       }
       
-      // 状態初期化
       gameOver = false;
       score = 0;
       safeClickedCount = 0;
@@ -234,7 +235,7 @@
         updateScoreDisplay();
         updateRemainingDisplay();
         
-        // すべての安全メッシュがクリックされた場合 → クリア
+        // 残りの安全メッシュが 0 になった場合 → クリア
         if (safeClickedCount >= safeTotal) {
           document.getElementById('gameMessage').innerText = 'Clear!!';
           gameOver = true;
