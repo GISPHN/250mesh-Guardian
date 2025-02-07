@@ -12,6 +12,7 @@
   <style>
     body { margin: 0; padding: 0; }
     #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    /* 上部パネル */
     #topPanel {
       position: absolute;
       top: 10px;
@@ -27,12 +28,19 @@
       margin-top: 5px;
       margin-right: 5px;
     }
+    /* 残りメッシュ数表示用 */
+    #remaining {
+      margin-top: 5px;
+      font-weight: bold;
+      color: #333;
+    }
   </style>
 </head>
 <body>
-  <!-- スコア表示＆リセット・シェアボタン用パネル -->
+  <!-- スコア表示、残りメッシュ数＆リセット・シェアボタン用パネル -->
   <div id="topPanel">
     <div id="score">Score: 0</div>
+    <div id="remaining">Remaining: 0</div>
     <button id="resetBtn">Reset</button>
     <button id="shareBtn" disabled>Share on X</button>
     <div id="gameMessage" style="margin-top:5px; font-weight:bold; color:red;"></div>
@@ -50,8 +58,8 @@
       zoom: 10
     });
     
-    // GeoJSON のパス（適宜実際のパスに置き換えてください）
-    const municipalityUrl = 'municipalities.geojson';  // 自治体境界の GeoJSON
+    // GeoJSON のパス（実際のパスに合わせてください）
+    const municipalityUrl = 'municipalities.geojson'; // 自治体境界の GeoJSON
     const meshDataUrl = 'pop_Osakacity_yodogawku.geojson'; // 人口データファイル
     
     // グローバル変数
@@ -64,6 +72,12 @@
     let municipalityMeshes = null;
     let safeTotal = 0;        // 安全な（高人口でない）メッシュ総数
     let safeClickedCount = 0; // クリック済みの安全メッシュ数
+    
+    // 残りクリック可能なメッシュ数表示の更新
+    function updateRemainingDisplay() {
+      const remaining = safeTotal - safeClickedCount;
+      document.getElementById('remaining').innerText = 'Remaining: ' + remaining;
+    }
     
     // スコア表示更新
     function updateScoreDisplay() {
@@ -105,6 +119,7 @@
         map.removeSource('meshes');
       }
       
+      // 状態初期化
       gameOver = false;
       score = 0;
       safeClickedCount = 0;
@@ -143,7 +158,9 @@
       // 安全なメッシュ（高人口以外）の総数を計算
       safeTotal = meshesInMunicipality.filter(f => f.properties["T001142001_人口（総数）"] < q3Value).length;
       console.log('クリック可能な安全メッシュ数:', safeTotal);
+      updateRemainingDisplay();
       
+      // 自治体内のメッシュをまとめた GeoJSON を作成
       municipalityMeshes = {
         "type": "FeatureCollection",
         "features": meshesInMunicipality
@@ -215,7 +232,9 @@
         score++;
         safeClickedCount++;
         updateScoreDisplay();
+        updateRemainingDisplay();
         
+        // すべての安全メッシュがクリックされた場合 → クリア
         if (safeClickedCount >= safeTotal) {
           document.getElementById('gameMessage').innerText = 'Clear!!';
           gameOver = true;
