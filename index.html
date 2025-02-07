@@ -72,6 +72,25 @@
       background: rgba(0, 0, 0, 0.4);
       z-index: 900;
     }
+    /* 作成者表示エリア */
+    #creator {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      z-index: 1001;
+      font-family: sans-serif;
+      font-size: 14px;
+      color: #333;
+    }
+    #creator a {
+      text-decoration: none;
+      color: #333;
+    }
+    #creator img {
+      vertical-align: middle;
+      height: 20px;
+      margin-right: 5px;
+    }
   </style>
 </head>
 <body>
@@ -96,6 +115,13 @@
     <button id="popupCloseBtn">Close</button>
   </div>
   
+  <!-- 作成者表示エリア -->
+  <div id="creator">
+    <a href="https://x.com/GISPHN" target="_blank">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/c/cd/X_Logo.svg" alt="Xのロゴ">GISPHN
+    </a>
+  </div>
+  
   <script>
     /**********************
      * 背景地図設定
@@ -114,10 +140,9 @@
     let meshData = null;
     let score = 0;
     let gameOver = false;
-    let q3Value = 0;
     let currentMunicipality = null;
     let municipalityMeshes = null;
-    let safeTotal = 0;        // 安全な（高人口でない）メッシュ総数
+    let safeTotal = 0;        // 安全な（クリック可能な）メッシュ数＝全メッシュ数 - 5
     let safeClickedCount = 0; // クリック済みの安全メッシュ数
 
     /**********************
@@ -192,33 +217,35 @@
       // 自治体データからランダムに1件選択
       const features = municipalityData.features;
       currentMunicipality = features[Math.floor(Math.random() * features.length)];
-      console.log("Selected municipality:", currentMunicipality.properties.name);
+      console.log("選択された自治体:", currentMunicipality.properties.name);
       
       // 自治体境界に合わせてマップ表示範囲調整
       const bbox = turf.bbox(currentMunicipality);
       map.fitBounds(bbox, { padding: 20 });
       
-      // 人口データ内のメッシュから、自治体内のものを抽出（重心で判定）
+      // 人口データ内のメッシュから、自治体内のものを抽出（重心判定）
       const meshesInMunicipality = meshData.features.filter(feature => {
         const centroid = turf.centroid(feature).geometry.coordinates;
         return turf.booleanPointInPolygon(centroid, currentMunicipality);
       });
       if (meshesInMunicipality.length === 0) {
-        console.error("No mesh found within the selected municipality");
+        console.error("選択された自治体内にメッシュがありません");
         return;
       }
       
-      // 第3四分位数（75パーセンタイル）の計算  
-      // ※ メッシュ人口は "T001142001_人口（総数）" プロパティを使用
-      const populations = meshesInMunicipality.map(f => f.properties["T001142001_人口（総数）"]);
-      populations.sort((a, b) => a - b);
-      const q3Index = Math.floor(0.75 * populations.length);
-      q3Value = populations[q3Index];
-      console.log('75th percentile population:', q3Value);
+      // 各メッシュに元の配列内でのインデックスを保存
+      meshesInMunicipality.forEach((feature, i) => {
+        feature.originalIndex = i;
+      });
+      // 降順にソートして、上位5件をアウトのメッシュとする
+      const sortedFeatures = meshesInMunicipality.slice().sort((a, b) => {
+        return b.properties["T001142001_人口（総数）"] - a.properties["T001142001_人口（総数）"];
+      });
+      const outOriginalIndices = new Set(sortedFeatures.slice(0, 5).map(f => f.originalIndex));
       
-      // 安全なメッシュ（高人口未満）の総数を算出
-      safeTotal = meshesInMunicipality.filter(f => f.properties["T001142001_人口（総数）"] < q3Value).length;
-      console.log('Total safe meshes:', safeTotal);
+      // 安全なメッシュ数は、全メッシュ数からアウトのメッシュ数（5）を引いた数
+      safeTotal = Math.max(0, meshesInMunicipality.length - 5);
+      console.log('クリック可能な安全メッシュ数:', safeTotal);
       updateRemainingDisplay();
       
       // 抽出したメッシュを GeoJSON としてまとめる
@@ -226,9 +253,10 @@
         "type": "FeatureCollection",
         "features": meshesInMunicipality
       };
-      // 各メッシュに一意な id を付与（feature state 利用のため）
+      // 各メッシュに一意な id とアウトかどうかのフラグを付与
       municipalityMeshes.features.forEach((feature, i) => {
         feature.id = i;
+        feature.out = outOriginalIndices.has(feature.originalIndex);
       });
       
       // GeoJSON ソース追加
@@ -237,7 +265,7 @@
         data: municipalityMeshes
       });
       
-      // メッシュレイヤー追加（未クリックは半透明の白、クリック済みは透明）
+      // メッシュレイヤー追加（未クリック：半透明の灰色、クリック済み：透明）
       map.addLayer({
         id: 'meshes-layer',
         type: 'fill',
@@ -247,8 +275,8 @@
           'fill-color': [
             "case",
             ["boolean", ["feature-state", "safeClicked"], false],
-            "rgba(255,255,255,0)",
-            "rgba(255,255,255,0.5)"
+            "rgba(128,128,128,0)",      // クリック済みなら透明
+            "rgba(128,128,128,0.5)"       // 未クリックは半透明の灰色
           ],
           'fill-outline-color': 'rgba(0,0,0,0.5)'
         }
@@ -272,12 +300,13 @@
       if (state && state.safeClicked) return;
       
       const pop = clickedFeature.properties["T001142001_人口（総数）"];
-      console.log("Clicked mesh population:", pop);
+      console.log("クリックされたメッシュの人口:", pop);
       
-      if (pop >= q3Value) {
-        // 高人口メッシュをクリック → Game Over
+      if (clickedFeature.out) {
+        // 上位5つ（アウト）のメッシュをクリック → ゲームオーバー
         const remainingSafe = safeTotal - safeClickedCount;
-        document.getElementById('gameMessage').innerText = 'Game Over! High population mesh clicked. Remaining: ' + remainingSafe;
+        document.getElementById('gameMessage').innerText =
+          'ゲームオーバー！上位5つのメッシュをクリックしました。残り：' + remainingSafe;
         gameOver = true;
         map.off('click', 'meshes-layer', handleMeshClick);
         showSharePopup(document.getElementById('gameMessage').innerText);
@@ -289,7 +318,7 @@
         updateScoreDisplay();
         updateRemainingDisplay();
         if (safeClickedCount >= safeTotal) {
-          document.getElementById('gameMessage').innerText = 'Clear!!';
+          document.getElementById('gameMessage').innerText = 'クリア!!';
           gameOver = true;
           map.off('click', 'meshes-layer', handleMeshClick);
           celebrate();
@@ -319,7 +348,7 @@
         municipalityData = results[0];
         meshData = results[1];
         startGame();
-      }).catch(err => console.error("Data loading error:", err));
+      }).catch(err => console.error("データ読み込みエラー:", err));
     });
   </script>
 </body>
