@@ -72,12 +72,9 @@
       background: rgba(0, 0, 0, 0.4);
       z-index: 900;
     }
-    /* 作成者表示エリア */
+    /* 作成者表示（リセットボタンの下に表示する） */
     #creator {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      z-index: 1001;
+      margin-top: 10px;
       font-family: sans-serif;
       font-size: 14px;
       color: #333;
@@ -91,14 +88,30 @@
       height: 20px;
       margin-right: 5px;
     }
+    /* 画面右下の attribution（MapLibre・OSM の標記） */
+    #attribution {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      font-family: sans-serif;
+      font-size: 12px;
+      color: #333;
+      z-index: 1001;
+    }
   </style>
 </head>
 <body>
-  <!-- 上部パネル：スコア・残りメッシュ数・リセット -->
+  <!-- 上部パネル：スコア・残りメッシュ数・リセット・作成者表示 -->
   <div id="topPanel">
     <div id="score">Score: 0</div>
     <div id="remaining">Remaining: 0</div>
     <button id="resetBtn">Reset</button>
+    <!-- 作成者表示：Xロゴと「GISPHN」リンク（リセットボタンの下に表示） -->
+    <div id="creator">
+      <a href="https://x.com/GISPHN" target="_blank">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/c/cd/X_Logo.svg" alt="Xのロゴ">GISPHN
+      </a>
+    </div>
     <div id="gameMessage" style="margin-top:5px; font-weight:bold; color:red;"></div>
   </div>
   
@@ -115,11 +128,9 @@
     <button id="popupCloseBtn">Close</button>
   </div>
   
-  <!-- 作成者表示エリア -->
-  <div id="creator">
-    <a href="https://x.com/GISPHN" target="_blank">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/c/cd/X_Logo.svg" alt="Xのロゴ">GISPHN
-    </a>
+  <!-- 画面右下： attribution（MapLibre と OSM の標記） -->
+  <div id="attribution">
+    Powered by <a href="https://maplibre.org/" target="_blank">MapLibre GL JS</a> | © <a href="https://www.openstreetmap.org/" target="_blank">OpenStreetMap</a>
   </div>
   
   <script>
@@ -140,9 +151,10 @@
     let meshData = null;
     let score = 0;
     let gameOver = false;
+    let q3Value = 0;
     let currentMunicipality = null;
     let municipalityMeshes = null;
-    let safeTotal = 0;        // 安全な（クリック可能な）メッシュ数＝全メッシュ数 - 5
+    let safeTotal = 0;        // 安全な（クリック可能な）メッシュ数＝全メッシュ数から、第3四分位数以上のメッシュ数を引いた数
     let safeClickedCount = 0; // クリック済みの安全メッシュ数
 
     /**********************
@@ -233,18 +245,16 @@
         return;
       }
       
-      // 各メッシュに元の配列内でのインデックスを保存
-      meshesInMunicipality.forEach((feature, i) => {
-        feature.originalIndex = i;
-      });
-      // 降順にソートして、上位5件をアウトのメッシュとする
-      const sortedFeatures = meshesInMunicipality.slice().sort((a, b) => {
-        return b.properties["T001142001_人口（総数）"] - a.properties["T001142001_人口（総数）"];
-      });
-      const outOriginalIndices = new Set(sortedFeatures.slice(0, 5).map(f => f.originalIndex));
+      // 第3四分位数（75パーセンタイル）の計算  
+      // ※ メッシュ人口は "T001142001_人口（総数）" プロパティを使用
+      const populations = meshesInMunicipality.map(f => f.properties["T001142001_人口（総数）"]);
+      populations.sort((a, b) => a - b);
+      const q3Index = Math.floor(0.75 * populations.length);
+      q3Value = populations[q3Index];
+      console.log('第3四分位数の人口:', q3Value);
       
-      // 安全なメッシュ数は、全メッシュ数からアウトのメッシュ数（5）を引いた数
-      safeTotal = Math.max(0, meshesInMunicipality.length - 5);
+      // 安全なメッシュ数は、全メッシュ数から「第3四分位数以上」のメッシュ数を引いた数
+      safeTotal = meshesInMunicipality.filter(f => f.properties["T001142001_人口（総数）"] < q3Value).length;
       console.log('クリック可能な安全メッシュ数:', safeTotal);
       updateRemainingDisplay();
       
@@ -253,10 +263,9 @@
         "type": "FeatureCollection",
         "features": meshesInMunicipality
       };
-      // 各メッシュに一意な id とアウトかどうかのフラグを付与
+      // 各メッシュに一意な id を付与
       municipalityMeshes.features.forEach((feature, i) => {
         feature.id = i;
-        feature.out = outOriginalIndices.has(feature.originalIndex);
       });
       
       // GeoJSON ソース追加
@@ -302,11 +311,11 @@
       const pop = clickedFeature.properties["T001142001_人口（総数）"];
       console.log("クリックされたメッシュの人口:", pop);
       
-      if (clickedFeature.out) {
-        // 上位5つ（アウト）のメッシュをクリック → ゲームオーバー
+      if (pop >= q3Value) {
+        // 第3四分位数以上のメッシュをクリック → ゲームオーバー
         const remainingSafe = safeTotal - safeClickedCount;
         document.getElementById('gameMessage').innerText =
-          'ゲームオーバー！上位5つのメッシュをクリックしました。残り：' + remainingSafe;
+          'ゲームオーバー！第3四分位数以上のメッシュをクリックしました。残り：' + remainingSafe;
         gameOver = true;
         map.off('click', 'meshes-layer', handleMeshClick);
         showSharePopup(document.getElementById('gameMessage').innerText);
