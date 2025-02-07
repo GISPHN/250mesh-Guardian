@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <title>250mesh Guardian</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HK2ZMH65Q0"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+  
+    gtag('config', 'G-HK2ZMH65Q0');
+  </script>
   <!-- MapLibre GL JS の読み込み -->
   <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
@@ -95,7 +104,7 @@
       text-decoration: none;
       color: #333;
     }
-    /* 右下の著作権表示（常に表示、背景とパディングを追加して見やすく） */
+    /* 右下の著作権表示（常に表示、背景付き） */
     #attribution {
       position: fixed;
       bottom: 10px;
