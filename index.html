@@ -10,8 +10,19 @@
   <!-- Turf.js の読み込み -->
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
   <style>
-    body { margin: 0; padding: 0; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    /* html, body の高さを指定して、#map の 100% 指定が有効になるように */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    /* 地図表示領域 */
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
     /* 上部パネル */
     #topPanel {
       position: absolute;
@@ -47,13 +58,17 @@
       z-index: 1000;
       box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
     }
-    #sharePopup button { margin-right: 5px; }
+    #sharePopup button {
+      margin-right: 5px;
+    }
     /* オーバーレイ */
     #overlay {
       display: none;
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       background: rgba(0, 0, 0, 0.4);
       z-index: 900;
     }
@@ -66,7 +81,7 @@
     <div id="remaining">Remaining: 0</div>
     <button id="resetBtn">Reset</button>
     <button id="toggleBaseMap">Switch Base Map</button>
-    <!-- ※ 従来のシェアボタンは非表示（自動表示するため） -->
+    <!-- ※ シェアボタンは自動表示のため非表示 -->
     <button id="shareBtn" disabled style="display:none;">Share on X</button>
     <div id="gameMessage" style="margin-top:5px; font-weight:bold; color:red;"></div>
   </div>
@@ -74,10 +89,10 @@
   <!-- 地図表示領域 -->
   <div id="map"></div>
   
-  <!-- オーバーレイ -->
+  <!-- オーバーレイ（シェアポップアップ背景用） -->
   <div id="overlay"></div>
   
-  <!-- シェアポップアップ -->
+  <!-- シェアポップアップ（ゲーム終了時に自動表示） -->
   <div id="sharePopup">
     <div id="shareMessage" style="margin-bottom: 10px;"></div>
     <button id="popupShareBtn">Share on X</button>
@@ -88,7 +103,7 @@
     /**********************
      * ベースマップ設定
      **********************/
-    // OSM標準（MapLibreデモタイル）とGSI Orthoのスタイル定義
+    // OSM標準マップ（MapLibre デモタイル）の URL と GSI Ortho のスタイル定義
     const osmStyle = 'https://demotiles.maplibre.org/style.json';
     const gsiStyle = {
       "version": 8,
@@ -101,16 +116,18 @@
           "attribution": "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>国土地理院</a>"
         }
       },
-      "layers": [{
-        "id": "ortho",
-        "type": "raster",
-        "source": "ortho",
-        "minzoom": 0,
-        "maxzoom": 18
-      }]
+      "layers": [
+        {
+          "id": "ortho",
+          "type": "raster",
+          "source": "ortho",
+          "minzoom": 0,
+          "maxzoom": 18
+        }
+      ]
     };
-    let currentBaseMap = "OSM"; // 初期はOSM
-    
+    let currentBaseMap = "OSM"; // 初期は OSM
+
     /**********************
      * ゲーム用グローバル変数
      **********************/
@@ -141,7 +158,9 @@
     function celebrate() {
       const topPanel = document.getElementById('topPanel');
       topPanel.style.background = "gold";
-      setTimeout(() => { topPanel.style.background = "rgba(255,255,255,0.9)"; }, 1000);
+      setTimeout(() => {
+        topPanel.style.background = "rgba(255,255,255,0.9)";
+      }, 1000);
     }
 
     /**********************
@@ -175,7 +194,7 @@
      * ゲーム開始／リセット処理
      **********************/
     function startGame() {
-      // カスタムレイヤーがあれば削除
+      // 既存のカスタムレイヤーがあれば削除
       if (map.getLayer('meshes-layer')) {
         map.off('click', 'meshes-layer', handleMeshClick);
         map.removeLayer('meshes-layer');
@@ -200,7 +219,7 @@
       const bbox = turf.bbox(currentMunicipality);
       map.fitBounds(bbox, { padding: 20 });
       
-      // 人口データ内のメッシュから、自治体内のものを抽出（重心で判定）
+      // 人口データ内のメッシュから、自治体内のものを抽出（重心判定）
       const meshesInMunicipality = meshData.features.filter(feature => {
         const centroid = turf.centroid(feature).geometry.coordinates;
         return turf.booleanPointInPolygon(centroid, currentMunicipality);
@@ -210,7 +229,7 @@
         return;
       }
       
-      // 第3四分位数（75パーセンタイル）の計算（プロパティ "T001142001_人口（総数）" 使用）
+      // 第3四分位数（75パーセンタイル）の計算（"T001142001_人口（総数）" 使用）
       const populations = meshesInMunicipality.map(f => f.properties["T001142001_人口（総数）"]);
       populations.sort((a, b) => a - b);
       const q3Index = Math.floor(0.75 * populations.length);
@@ -227,7 +246,7 @@
         "type": "FeatureCollection",
         "features": meshesInMunicipality
       };
-      // 各メッシュに一意な id を付与（feature state 利用のため）
+      // 各メッシュに一意な id を付与（feature state 利用）
       municipalityMeshes.features.forEach((feature, i) => {
         feature.id = i;
       });
@@ -276,7 +295,7 @@
       console.log("クリックされたメッシュの人口:", pop);
       
       if (pop >= q3Value) {
-        // 高人口クリック＝Game Over
+        // 高人口クリック → Game Over
         const remainingSafe = safeTotal - safeClickedCount;
         document.getElementById('gameMessage').innerText = 
           'Game Over! 高人口メッシュをクリックしました。残り: ' + remainingSafe;
@@ -311,7 +330,7 @@
         currentBaseMap = "OSM";
         map.setStyle(osmStyle);
       }
-      // スタイル変更後、カスタムレイヤー再構築のために再度ゲームを開始
+      // スタイル変更後、カスタムレイヤー再構築のために再度ゲーム開始
       map.once('style.load', function(){
         startGame();
       });
@@ -328,7 +347,7 @@
     });
 
     /**********************
-     * マップ読み込み後、データ取得＆ゲーム開始
+     * マップ読み込み後、自治体・メッシュデータ取得＆ゲーム開始
      **********************/
     map.on('load', function() {
       Promise.all([
