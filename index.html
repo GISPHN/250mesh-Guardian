@@ -10,7 +10,7 @@
   <!-- Turf.js の読み込み -->
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
   <style>
-    /* html, body の高さを100%に設定 */
+    /* html, body に高さを指定 */
     html, body {
       height: 100%;
       margin: 0;
@@ -75,14 +75,11 @@
   </style>
 </head>
 <body>
-  <!-- 上部パネル：スコア・残りメッシュ数・リセット・ベースマップ切替 -->
+  <!-- 上部パネル：スコア・残りメッシュ数・リセット -->
   <div id="topPanel">
     <div id="score">Score: 0</div>
     <div id="remaining">Remaining: 0</div>
     <button id="resetBtn">Reset</button>
-    <button id="toggleBaseMap">Switch Base Map</button>
-    <!-- 従来のシェアボタンは自動ポップアップ用なので非表示 -->
-    <button id="shareBtn" disabled style="display:none;">Share on X</button>
     <div id="gameMessage" style="margin-top:5px; font-weight:bold; color:red;"></div>
   </div>
   
@@ -101,45 +98,15 @@
   
   <script>
     /**********************
-     * ベースマップ設定
+     * 背景地図設定
      **********************/
-    // ３種類のベースマップ定義
-    const baseMaps = [
-      {
-        name: "OSM Bright",
-        style: "https://tile.openstreetmap.jp/styles/osm-bright/style.json"
-      },
-      {
-        name: "OSMFJ POI",
-        style: "https://raw.githubusercontent.com/armd-02/Playgrounds/main/tiles/osmfj_poi.json"
-      },
-      {
-        name: "全国最新写真",
-        style: {
-          version: 8,
-          name: "Seamless Photo",
-          sources: {
-            "raster-tiles": {
-              type: "raster",
-              tiles: ["https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"],
-              tileSize: 256,
-              attribution: "<a href='https://www.gsi.go.jp/kikakuchousei/kikakuchousei40182.html' target='_blank'>国土地理院</a>"
-            }
-          },
-          layers: [
-            {
-              id: "raster-tiles",
-              type: "raster",
-              source: "raster-tiles",
-              minzoom: 0,
-              maxzoom: 18
-            }
-          ]
-        }
-      }
-    ];
-    let currentBaseMapIndex = 0;
-
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tile.openstreetmap.jp/styles/osm-bright/style.json',
+      center: [139.6917, 35.6895],
+      zoom: 10
+    });
+    
     /**********************
      * ゲーム用グローバル変数
      **********************/
@@ -206,7 +173,7 @@
      * ゲーム開始／リセット処理
      **********************/
     function startGame() {
-      // カスタムレイヤーがあれば削除
+      // 既存のカスタムレイヤーがあれば削除
       if (map.getLayer('meshes-layer')) {
         map.off('click', 'meshes-layer', handleMeshClick);
         map.removeLayer('meshes-layer');
@@ -225,33 +192,33 @@
       // 自治体データからランダムに1件選択
       const features = municipalityData.features;
       currentMunicipality = features[Math.floor(Math.random() * features.length)];
-      console.log("選択された自治体:", currentMunicipality.properties.name);
+      console.log("Selected municipality:", currentMunicipality.properties.name);
       
       // 自治体境界に合わせてマップ表示範囲調整
       const bbox = turf.bbox(currentMunicipality);
       map.fitBounds(bbox, { padding: 20 });
       
-      // 人口データ内のメッシュから、自治体内のものを抽出（重心判定）
+      // 人口データ内のメッシュから、自治体内のものを抽出（重心で判定）
       const meshesInMunicipality = meshData.features.filter(feature => {
         const centroid = turf.centroid(feature).geometry.coordinates;
         return turf.booleanPointInPolygon(centroid, currentMunicipality);
       });
       if (meshesInMunicipality.length === 0) {
-        console.error("選択された自治体内にメッシュがありません");
+        console.error("No mesh found within the selected municipality");
         return;
       }
       
-      // 第3四分位数（75パーセンタイル）の計算
+      // 第3四分位数（75パーセンタイル）の計算  
       // ※ メッシュ人口は "T001142001_人口（総数）" プロパティを使用
       const populations = meshesInMunicipality.map(f => f.properties["T001142001_人口（総数）"]);
       populations.sort((a, b) => a - b);
       const q3Index = Math.floor(0.75 * populations.length);
       q3Value = populations[q3Index];
-      console.log('第3四分位数の人口:', q3Value);
+      console.log('75th percentile population:', q3Value);
       
       // 安全なメッシュ（高人口未満）の総数を算出
       safeTotal = meshesInMunicipality.filter(f => f.properties["T001142001_人口（総数）"] < q3Value).length;
-      console.log('クリック可能な安全メッシュ数:', safeTotal);
+      console.log('Total safe meshes:', safeTotal);
       updateRemainingDisplay();
       
       // 抽出したメッシュを GeoJSON としてまとめる
@@ -287,7 +254,7 @@
         }
       });
       
-      // クリックイベントバインド
+      // クリックイベントのバインド
       map.on('click', 'meshes-layer', handleMeshClick);
       map.on('mouseenter', 'meshes-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'meshes-layer', () => { map.getCanvas().style.cursor = ''; });
@@ -305,12 +272,12 @@
       if (state && state.safeClicked) return;
       
       const pop = clickedFeature.properties["T001142001_人口（総数）"];
-      console.log("クリックされたメッシュの人口:", pop);
+      console.log("Clicked mesh population:", pop);
       
       if (pop >= q3Value) {
-        // 高人口クリック → Game Over
+        // 高人口メッシュをクリック → Game Over
         const remainingSafe = safeTotal - safeClickedCount;
-        document.getElementById('gameMessage').innerText = 'Game Over! 高人口メッシュをクリックしました。残り: ' + remainingSafe;
+        document.getElementById('gameMessage').innerText = 'Game Over! High population mesh clicked. Remaining: ' + remainingSafe;
         gameOver = true;
         map.off('click', 'meshes-layer', handleMeshClick);
         showSharePopup(document.getElementById('gameMessage').innerText);
@@ -330,21 +297,6 @@
         }
       }
     }
-
-    /**********************
-     * ベースマップ切替処理（3種類の切替）
-     **********************/
-    document.getElementById('toggleBaseMap').addEventListener('click', function(){
-      // 次のベースマップへサイクル
-      currentBaseMapIndex = (currentBaseMapIndex + 1) % baseMaps.length;
-      const selected = baseMaps[currentBaseMapIndex];
-      console.log("切り替え: " + selected.name);
-      map.setStyle(selected.style);
-      // スタイル変更後、カスタムレイヤー再構築のためにゲームを再スタート
-      map.once('style.load', function(){
-        startGame();
-      });
-    });
 
     /**********************
      * リセットボタン処理
@@ -367,7 +319,7 @@
         municipalityData = results[0];
         meshData = results[1];
         startGame();
-      }).catch(err => console.error("データ読み込みエラー:", err));
+      }).catch(err => console.error("Data loading error:", err));
     });
   </script>
 </body>
