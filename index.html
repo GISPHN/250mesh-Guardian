@@ -7,7 +7,7 @@
   <!-- MapLibre GL JS の読み込み -->
   <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
-  <!-- Turf.js（ジオメトリ処理用）の読み込み -->
+  <!-- Turf.js の読み込み -->
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
   <style>
     body { margin: 0; padding: 0; }
@@ -28,13 +28,13 @@
       margin-top: 5px;
       margin-right: 5px;
     }
-    /* 残りメッシュ数表示用 */
+    /* 残りメッシュ数表示 */
     #remaining {
       margin-top: 5px;
       font-weight: bold;
       color: #333;
     }
-    /* シェアポップアップ用 */
+    /* シェアポップアップ */
     #sharePopup {
       display: none;
       position: fixed;
@@ -47,10 +47,8 @@
       z-index: 1000;
       box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
     }
-    #sharePopup button {
-      margin-right: 5px;
-    }
-    /* 背景の半透明オーバーレイ */
+    #sharePopup button { margin-right: 5px; }
+    /* オーバーレイ */
     #overlay {
       display: none;
       position: fixed;
@@ -62,13 +60,13 @@
   </style>
 </head>
 <body>
-  <!-- 上部パネル：スコア・残りメッシュ数・リセット・ベースマップ切替 -->
+  <!-- 上部パネル（スコア・残りメッシュ数・リセット・ベースマップ切替） -->
   <div id="topPanel">
     <div id="score">Score: 0</div>
     <div id="remaining">Remaining: 0</div>
     <button id="resetBtn">Reset</button>
     <button id="toggleBaseMap">Switch Base Map</button>
-    <!-- （従来のシェアボタンは残しておくが非表示／無効） -->
+    <!-- ※ 従来のシェアボタンは非表示（自動表示するため） -->
     <button id="shareBtn" disabled style="display:none;">Share on X</button>
     <div id="gameMessage" style="margin-top:5px; font-weight:bold; color:red;"></div>
   </div>
@@ -76,10 +74,10 @@
   <!-- 地図表示領域 -->
   <div id="map"></div>
   
-  <!-- オーバーレイ（ポップアップ背景用） -->
+  <!-- オーバーレイ -->
   <div id="overlay"></div>
   
-  <!-- シェアポップアップ（ゲーム終了時に自動表示） -->
+  <!-- シェアポップアップ -->
   <div id="sharePopup">
     <div id="shareMessage" style="margin-bottom: 10px;"></div>
     <button id="popupShareBtn">Share on X</button>
@@ -87,37 +85,35 @@
   </div>
   
   <script>
-    /********************
+    /**********************
      * ベースマップ設定
-     ********************/
-    // OSM標準マップ（MapLibreデモスタイル）および国土地理院の全国最新写真（GSI Ortho）の定義
+     **********************/
+    // OSM標準（MapLibreデモタイル）とGSI Orthoのスタイル定義
     const osmStyle = 'https://demotiles.maplibre.org/style.json';
     const gsiStyle = {
       "version": 8,
       "name": "GSI Ortho",
       "sources": {
-        "raster-tiles": {
+        "ortho": {
           "type": "raster",
           "tiles": ["https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"],
           "tileSize": 256,
-          "attribution": "<a href='https://maps.gsi.go.jp/development/ichiran.html'>国土地理院</a>"
+          "attribution": "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>国土地理院</a>"
         }
       },
-      "layers": [
-        {
-          "id": "raster-tiles",
-          "type": "raster",
-          "source": "raster-tiles",
-          "minzoom": 0,
-          "maxzoom": 18
-        }
-      ]
+      "layers": [{
+        "id": "ortho",
+        "type": "raster",
+        "source": "ortho",
+        "minzoom": 0,
+        "maxzoom": 18
+      }]
     };
-    let currentBaseMap = "OSM"; // 初期はOSM標準マップ
-
-    /********************
+    let currentBaseMap = "OSM"; // 初期はOSM
+    
+    /**********************
      * ゲーム用グローバル変数
-     ********************/
+     **********************/
     let municipalityData = null;
     let meshData = null;
     let score = 0;
@@ -128,31 +124,29 @@
     let safeTotal = 0;        // 安全な（高人口でない）メッシュ総数
     let safeClickedCount = 0; // クリック済みの安全メッシュ数
 
-    /********************
+    /**********************
      * 表示更新関数
-     ********************/
+     **********************/
+    function updateScoreDisplay() {
+      document.getElementById('score').innerText = 'Score: ' + score;
+    }
     function updateRemainingDisplay() {
       const remaining = safeTotal - safeClickedCount;
       document.getElementById('remaining').innerText = 'Remaining: ' + remaining;
     }
-    function updateScoreDisplay() {
-      document.getElementById('score').innerText = 'Score: ' + score;
-    }
 
-    /********************
+    /**********************
      * お祝いアクション
-     ********************/
+     **********************/
     function celebrate() {
       const topPanel = document.getElementById('topPanel');
       topPanel.style.background = "gold";
-      setTimeout(() => {
-        topPanel.style.background = "rgba(255,255,255,0.9)";
-      }, 1000);
+      setTimeout(() => { topPanel.style.background = "rgba(255,255,255,0.9)"; }, 1000);
     }
 
-    /********************
-     * シェア処理（X投稿用）
-     ********************/
+    /**********************
+     * シェア処理（X用）
+     **********************/
     function shareOnX() {
       let message = document.getElementById("gameMessage").innerText;
       if (!message) {
@@ -162,9 +156,9 @@
       window.open(shareUrl, "_blank");
     }
 
-    /********************
+    /**********************
      * シェアポップアップ制御
-     ********************/
+     **********************/
     function showSharePopup(message) {
       document.getElementById('shareMessage').innerText = message;
       document.getElementById('overlay').style.display = 'block';
@@ -174,18 +168,14 @@
       document.getElementById('sharePopup').style.display = 'none';
       document.getElementById('overlay').style.display = 'none';
     }
-    document.getElementById('popupShareBtn').addEventListener('click', function(){
-      shareOnX();
-    });
-    document.getElementById('popupCloseBtn').addEventListener('click', function(){
-      hideSharePopup();
-    });
+    document.getElementById('popupShareBtn').addEventListener('click', shareOnX);
+    document.getElementById('popupCloseBtn').addEventListener('click', hideSharePopup);
 
-    /********************
+    /**********************
      * ゲーム開始／リセット処理
-     ********************/
+     **********************/
     function startGame() {
-      // 既存のゲームレイヤーがあれば削除
+      // カスタムレイヤーがあれば削除
       if (map.getLayer('meshes-layer')) {
         map.off('click', 'meshes-layer', handleMeshClick);
         map.removeLayer('meshes-layer');
@@ -194,13 +184,11 @@
         map.removeSource('meshes');
       }
       
-      // 状態初期化
       gameOver = false;
       score = 0;
       safeClickedCount = 0;
       updateScoreDisplay();
       document.getElementById('gameMessage').innerText = "";
-      // ※ シェアポップアップは自動表示するので、ここでは非表示に
       hideSharePopup();
       
       // 自治体データからランダムに1件選択
@@ -208,35 +196,33 @@
       currentMunicipality = features[Math.floor(Math.random() * features.length)];
       console.log("選択された自治体:", currentMunicipality.properties.name);
       
-      // 自治体のバウンディングボックスで地図をフィット
+      // 自治体境界に合わせてマップ表示範囲調整
       const bbox = turf.bbox(currentMunicipality);
       map.fitBounds(bbox, { padding: 20 });
       
-      // 人口データ内のメッシュのうち、自治体内のものを抽出（重心判定）
+      // 人口データ内のメッシュから、自治体内のものを抽出（重心で判定）
       const meshesInMunicipality = meshData.features.filter(feature => {
         const centroid = turf.centroid(feature).geometry.coordinates;
         return turf.booleanPointInPolygon(centroid, currentMunicipality);
       });
-      
       if (meshesInMunicipality.length === 0) {
         console.error("選択された自治体内にメッシュがありません");
         return;
       }
       
-      // 第3四分位数（75パーセンタイル）の計算
-      // ※ メッシュ人口は "T001142001_人口（総数）" プロパティを使用
+      // 第3四分位数（75パーセンタイル）の計算（プロパティ "T001142001_人口（総数）" 使用）
       const populations = meshesInMunicipality.map(f => f.properties["T001142001_人口（総数）"]);
       populations.sort((a, b) => a - b);
       const q3Index = Math.floor(0.75 * populations.length);
       q3Value = populations[q3Index];
       console.log('第3四分位数の人口:', q3Value);
       
-      // 安全なメッシュ（高人口以外）の総数を計算
+      // 安全なメッシュ（高人口未満）の総数を算出
       safeTotal = meshesInMunicipality.filter(f => f.properties["T001142001_人口（総数）"] < q3Value).length;
       console.log('クリック可能な安全メッシュ数:', safeTotal);
       updateRemainingDisplay();
       
-      // 自治体内のメッシュをまとめた GeoJSON を作成
+      // 抽出したメッシュを GeoJSON としてまとめる
       municipalityMeshes = {
         "type": "FeatureCollection",
         "features": meshesInMunicipality
@@ -252,7 +238,7 @@
         data: municipalityMeshes
       });
       
-      // メッシュレイヤー追加
+      // メッシュレイヤー追加（未クリックは半透明の白、クリック済みは透明）
       map.addLayer({
         id: 'meshes-layer',
         type: 'fill',
@@ -262,27 +248,22 @@
           'fill-color': [
             "case",
             ["boolean", ["feature-state", "safeClicked"], false],
-            "rgba(255,255,255,0)",      // クリック済み：塗りつぶしなし（枠線のみ）
-            "rgba(255,255,255,0.5)"       // 未クリック：半透明の白
+            "rgba(255,255,255,0)",
+            "rgba(255,255,255,0.5)"
           ],
           'fill-outline-color': 'rgba(0,0,0,0.5)'
         }
       });
       
-      // クリックイベントのバインド
+      // クリックイベントバインド
       map.on('click', 'meshes-layer', handleMeshClick);
-      // カーソル変更
-      map.on('mouseenter', 'meshes-layer', () => {
-        map.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'meshes-layer', () => {
-        map.getCanvas().style.cursor = '';
-      });
+      map.on('mouseenter', 'meshes-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'meshes-layer', () => { map.getCanvas().style.cursor = ''; });
     }
-    
-    /********************
+
+    /**********************
      * メッシュクリック時の処理
-     ********************/
+     **********************/
     function handleMeshClick(e) {
       if (gameOver) return;
       if (!e.features || e.features.length === 0) return;
@@ -291,18 +272,16 @@
       const state = map.getFeatureState({ source: 'meshes', id: clickedFeature.id });
       if (state && state.safeClicked) return;
       
-      // ※ 人口プロパティ "T001142001_人口（総数）" を使用
       const pop = clickedFeature.properties["T001142001_人口（総数）"];
       console.log("クリックされたメッシュの人口:", pop);
       
       if (pop >= q3Value) {
-        // Game Over の場合
+        // 高人口クリック＝Game Over
         const remainingSafe = safeTotal - safeClickedCount;
         document.getElementById('gameMessage').innerText = 
-          'Game Over! 高人口メッシュをクリックしました。残りのクリック可能な安全メッシュ数: ' + remainingSafe;
+          'Game Over! 高人口メッシュをクリックしました。残り: ' + remainingSafe;
         gameOver = true;
         map.off('click', 'meshes-layer', handleMeshClick);
-        // 自動でシェアポップアップを表示
         showSharePopup(document.getElementById('gameMessage').innerText);
       } else {
         // 安全なメッシュの場合
@@ -311,7 +290,6 @@
         safeClickedCount++;
         updateScoreDisplay();
         updateRemainingDisplay();
-        // すべての安全メッシュがクリックされた場合 → クリア
         if (safeClickedCount >= safeTotal) {
           document.getElementById('gameMessage').innerText = 'Clear!!';
           gameOver = true;
@@ -321,10 +299,10 @@
         }
       }
     }
-    
-    /********************
+
+    /**********************
      * ベースマップ切替処理
-     ********************/
+     **********************/
     document.getElementById('toggleBaseMap').addEventListener('click', function(){
       if (currentBaseMap === "OSM") {
         currentBaseMap = "GSI";
@@ -333,30 +311,25 @@
         currentBaseMap = "OSM";
         map.setStyle(osmStyle);
       }
-      // スタイル変更後、カスタムレイヤーを再追加するためにゲームを再スタート
+      // スタイル変更後、カスタムレイヤー再構築のために再度ゲームを開始
       map.once('style.load', function(){
         startGame();
       });
     });
-    
-    /********************
+
+    /**********************
      * リセットボタン処理
-     ********************/
+     **********************/
     document.getElementById('resetBtn').addEventListener('click', function(){
       map.off('click', 'meshes-layer', handleMeshClick);
       if (map.getLayer('meshes-layer')) { map.removeLayer('meshes-layer'); }
       if (map.getSource('meshes')) { map.removeSource('meshes'); }
       startGame();
     });
-    
-    /********************
-     * シェアボタン（従来のものは非表示）
-     ********************/
-    document.getElementById('shareBtn').addEventListener('click', shareOnX);
-    
-    /********************
-     * マップ読み込み後、自治体・メッシュデータを取得してゲーム開始
-     ********************/
+
+    /**********************
+     * マップ読み込み後、データ取得＆ゲーム開始
+     **********************/
     map.on('load', function() {
       Promise.all([
         fetch('municipalities.geojson').then(res => res.json()),
