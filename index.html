@@ -41,16 +41,17 @@
   <div id="map"></div>
   
   <script>
-    // MapLibre の初期化（OpenStreetMap タイルスタイルを利用）
+    // MapLibre の初期化（OSMbright スタイルを利用）
     const map = new maplibregl.Map({
       container: 'map',
-      style: 'https://demotiles.maplibre.org/style.json',
+      // OSMbright のスタイルURL（CDN版）
+      style: 'https://openmaptiles.github.io/osm-bright-gl-style/style-cdn.json',
       center: [139.6917, 35.6895],
       zoom: 10
     });
     
     // GeoJSON のパス（適宜実際のパスに置き換えてください）
-    const municipalityUrl = 'municipalities.geojson'; // 自治体境界の GeoJSON
+    const municipalityUrl = 'municipalities.geojson';  // 自治体境界の GeoJSON
     const meshDataUrl = 'pop_Osakacity_yodogawku.geojson'; // 人口データファイル
     
     // グローバル変数
@@ -85,13 +86,10 @@
     
     // X（旧Twitter）に投稿する処理
     function shareOnX() {
-      // ゲーム結果のメッセージを取得（ゲーム終了時に設定されたもの）
       let message = document.getElementById("gameMessage").innerText;
-      // ゲーム結果が設定されていない場合はスコアのみのメッセージにする
       if (!message) {
         message = "250mesh Guardian: Score " + score;
       }
-      // シェア用のURLを作成
       const shareUrl = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(message + " #250meshGuardian");
       window.open(shareUrl, "_blank");
     }
@@ -107,25 +105,23 @@
         map.removeSource('meshes');
       }
       
-      // 状態初期化
       gameOver = false;
       score = 0;
       safeClickedCount = 0;
       updateScoreDisplay();
       document.getElementById('gameMessage').innerText = "";
-      // シェアボタンは無効状態に
       document.getElementById('shareBtn').disabled = true;
       
-      // 自治体データからランダムに１件選択
+      // 自治体データからランダムに1件選択
       const features = municipalityData.features;
       currentMunicipality = features[Math.floor(Math.random() * features.length)];
       console.log("選択された自治体:", currentMunicipality.properties.name);
       
-      // 自治体のバウンディングボックスを計算してマップ表示範囲を調整
+      // 自治体のバウンディングボックスで地図をフィット
       const bbox = turf.bbox(currentMunicipality);
       map.fitBounds(bbox, { padding: 20 });
       
-      // 人口データファイル内のメッシュのうち、自治体内のものを抽出（重心が自治体内にあるかで判定）
+      // 人口データ内のメッシュのうち、自治体内のものを抽出（重心で判定）
       const meshesInMunicipality = meshData.features.filter(feature => {
         const centroid = turf.centroid(feature).geometry.coordinates;
         return turf.booleanPointInPolygon(centroid, currentMunicipality);
@@ -136,19 +132,18 @@
         return;
       }
       
-      // 第３四分位数（75パーセンタイル）の計算  
-      // ※ メッシュ人口はプロパティ "T001142001_人口（総数）" を使用する
+      // 第3四分位数（75パーセンタイル）の計算
+      // ※ メッシュ人口は "T001142001_人口（総数）" プロパティを使用
       const populations = meshesInMunicipality.map(f => f.properties["T001142001_人口（総数）"]);
       populations.sort((a, b) => a - b);
       const q3Index = Math.floor(0.75 * populations.length);
       q3Value = populations[q3Index];
-      console.log('第３四分位数の人口:', q3Value);
+      console.log('第3四分位数の人口:', q3Value);
       
       // 安全なメッシュ（高人口以外）の総数を計算
       safeTotal = meshesInMunicipality.filter(f => f.properties["T001142001_人口（総数）"] < q3Value).length;
       console.log('クリック可能な安全メッシュ数:', safeTotal);
       
-      // 自治体内のメッシュをまとめた GeoJSON を作成
       municipalityMeshes = {
         "type": "FeatureCollection",
         "features": meshesInMunicipality
@@ -159,14 +154,14 @@
         feature.id = i;
       });
       
-      // メッシュの GeoJSON ソースを追加
+      // GeoJSON ソース追加
       map.addSource('meshes', {
         type: 'geojson',
         data: municipalityMeshes
       });
       
       // メッシュレイヤー追加
-      // fill-color は feature state "safeClicked" が true の場合に透明、それ以外は半透明の白で表示
+      // ※ fill-color は安全クリック済みなら透明、未クリックなら半透明の白
       map.addLayer({
         id: 'meshes-layer',
         type: 'fill',
@@ -176,17 +171,17 @@
           'fill-color': [
             "case",
             ["boolean", ["feature-state", "safeClicked"], false],
-            "rgba(255,255,255,0)",  // 安全クリック済みの場合は塗りつぶしなし（枠線のみ）
-            "rgba(255,255,255,0.5)" // 初期状態は半透明の白
+            "rgba(255,255,255,0)",
+            "rgba(255,255,255,0.5)"
           ],
           'fill-outline-color': 'rgba(0,0,0,0.5)'
         }
       });
       
-      // メッシュクリック時のイベントバインド
+      // クリックイベントのバインド
       map.on('click', 'meshes-layer', handleMeshClick);
       
-      // マウスオーバー時はカーソルをポインターに変更
+      // カーソル変更
       map.on('mouseenter', 'meshes-layer', () => {
         map.getCanvas().style.cursor = 'pointer';
       });
@@ -197,62 +192,49 @@
     
     // メッシュクリック時の処理
     function handleMeshClick(e) {
-      if (gameOver) return;  // ゲーム終了時はクリック無視
+      if (gameOver) return;
       if (!e.features || e.features.length === 0) return;
       
       const clickedFeature = e.features[0];
-      // すでに安全クリック済みなら何もしない
       const state = map.getFeatureState({ source: 'meshes', id: clickedFeature.id });
       if (state && state.safeClicked) return;
       
-      // ※ メッシュ人口は "T001142001_人口（総数）" プロパティを使用する
+      // ※ 人口プロパティ "T001142001_人口（総数）" を使用
       const pop = clickedFeature.properties["T001142001_人口（総数）"];
       console.log("クリックされたメッシュの人口:", pop);
       
-      // 高人口（第３四分位数以上）の場合 → Game Over
       if (pop >= q3Value) {
         const remainingSafe = safeTotal - safeClickedCount;
         document.getElementById('gameMessage').innerText = 
           'Game Over! 高人口メッシュをクリックしました。残りのクリック可能な安全メッシュ数: ' + remainingSafe;
         gameOver = true;
-        // クリックイベントを解除
         map.off('click', 'meshes-layer', handleMeshClick);
-        // シェアボタンを有効化
         enableShareButton();
       } else {
-        // 安全なメッシュの場合
         map.setFeatureState({ source: 'meshes', id: clickedFeature.id }, { safeClicked: true });
         score++;
         safeClickedCount++;
         updateScoreDisplay();
         
-        // すべての安全メッシュがクリックされた場合 → クリア
         if (safeClickedCount >= safeTotal) {
           document.getElementById('gameMessage').innerText = 'Clear!!';
           gameOver = true;
           map.off('click', 'meshes-layer', handleMeshClick);
-          // お祝いのアクション
           celebrate();
-          // シェアボタンを有効化
           enableShareButton();
         }
       }
     }
     
-    // リセットボタンのクリック処理
+    // リセットボタンの処理
     document.getElementById('resetBtn').addEventListener('click', () => {
-      // 既存のイベント解除、レイヤー・ソース削除後に再初期化
       map.off('click', 'meshes-layer', handleMeshClick);
-      if (map.getLayer('meshes-layer')) {
-        map.removeLayer('meshes-layer');
-      }
-      if (map.getSource('meshes')) {
-        map.removeSource('meshes');
-      }
+      if (map.getLayer('meshes-layer')) { map.removeLayer('meshes-layer'); }
+      if (map.getSource('meshes')) { map.removeSource('meshes'); }
       startGame();
     });
     
-    // シェアボタンのクリック処理
+    // シェアボタンの処理
     document.getElementById('shareBtn').addEventListener('click', shareOnX);
     
     // マップ読み込み後、自治体・メッシュデータを取得してゲーム開始
