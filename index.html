@@ -74,7 +74,7 @@
   <div id="attribution">MapLibre | © OpenMapTiles © OpenStreetMap contributors</div>
   
   <script>
-    // ベースマップ
+    // ベースマップ定義
     const baseMaps = [
       "https://tile.openstreetmap.jp/styles/osm-bright/style.json",
       {
@@ -108,92 +108,55 @@
     let municipalityMeshes, currentMunicipality;
     const clickedIds = new Set();
     
-    // UI 更新
+    // UI 更新関数省略（前回と同じ）...
     function updateScoreDisplay(){ document.getElementById('score').innerText='Score: '+score; }
-    function updateRemainingDisplay(){
-      document.getElementById('remaining').innerText='Remaining: '+(safeTotal-safeClickedCount);
-    }
-    function celebrate(){
-      const p=document.getElementById('topPanel');
-      p.style.background="gold";
-      setTimeout(()=>p.style.background="rgba(255,255,255,0.9)",1000);
-    }
-    function shareOnX(){
-      let msg=document.getElementById('gameMessage').innerText||`250mesh Guardian: Score ${score}`;
-      window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(msg+" #250meshGuardian"),"_blank");
-    }
-    function showSharePopup(msg){
-      document.getElementById('shareMessage').innerText=msg;
-      document.getElementById('overlay').style.display='block';
-      document.getElementById('sharePopup').style.display='block';
-    }
-    function hideSharePopup(){
-      document.getElementById('sharePopup').style.display='none';
-      document.getElementById('overlay').style.display='none';
-    }
+    function updateRemainingDisplay(){ document.getElementById('remaining').innerText='Remaining: '+(safeTotal-safeClickedCount); }
+    function celebrate(){ const p=document.getElementById('topPanel'); p.style.background="gold"; setTimeout(()=>p.style.background="rgba(255,255,255,0.9)",1000); }
+    function shareOnX(){ let msg=document.getElementById('gameMessage').innerText||`250mesh Guardian: Score ${score}`; window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(msg+" #250meshGuardian"),"_blank"); }
+    function showSharePopup(msg){ document.getElementById('shareMessage').innerText=msg; document.getElementById('overlay').style.display='block'; document.getElementById('sharePopup').style.display='block'; }
+    function hideSharePopup(){ document.getElementById('sharePopup').style.display='none'; document.getElementById('overlay').style.display='none'; }
     document.getElementById('popupShareBtn').addEventListener('click',shareOnX);
     document.getElementById('popupCloseBtn').addEventListener('click',hideSharePopup);
     
-    // メッシュレイヤー追加（状態を保持）
+    // メッシュレイヤー追加
     function addMeshLayer(){
       map.addSource('meshes',{ type:'geojson', data: municipalityMeshes });
       map.addLayer({
         id:'meshes-layer', type:'fill', source:'meshes',
         paint:{
-          'fill-color':[
-            'case',
-            ['boolean',['feature-state','safeClicked'],false],
-            'rgba(128,128,128,0)','rgba(128,128,128,0.5)'
-          ],
+          'fill-color':['case',['boolean',['feature-state','safeClicked'],false],'rgba(128,128,128,0)','rgba(128,128,128,0.5)'],
           'fill-outline-color':'rgba(0,0,0,0.5)'
         }
       });
-      // クリック済み状態を復元
-      clickedIds.forEach(id=>{
-        map.setFeatureState({ source:'meshes', id },{ safeClicked:true });
-      });
-      // イベント再バインド
+      clickedIds.forEach(id=> map.setFeatureState({ source:'meshes', id },{ safeClicked:true }) );
       if(!gameOver) map.on('click','meshes-layer',handleMeshClick);
       map.on('mouseenter','meshes-layer',()=>map.getCanvas().style.cursor='pointer');
       map.on('mouseleave','meshes-layer',()=>map.getCanvas().style.cursor='');
     }
     
-    // ゲーム開始／リセット
+    // ゲーム開始
     function startGame(){
-      // 既存レイヤー削除
       if(map.getLayer('meshes-layer')){
         map.off('click','meshes-layer',handleMeshClick);
         map.removeLayer('meshes-layer');
         map.removeSource('meshes');
       }
-      // ステート初期化
       gameOver=false; score=0; safeClickedCount=0; clickedIds.clear();
       updateScoreDisplay(); document.getElementById('gameMessage').innerText="";
       hideSharePopup();
-      // ランダム自治体選択
       const fts=municipalityData.features;
       currentMunicipality=fts[Math.floor(Math.random()*fts.length)];
       map.fitBounds(turf.bbox(currentMunicipality),{padding:20});
-      // 自治体内メッシュ抽出
-      const meshesIn = meshData.features.filter(f=>{
-        return turf.booleanPointInPolygon(
-          turf.centroid(f), currentMunicipality
-        );
-      });
-      // Q3計算
+      const meshesIn=meshData.features.filter(f=> turf.booleanPointInPolygon(turf.centroid(f),currentMunicipality) );
       const pops=meshesIn.map(f=>f.properties["T001142001_人口（総数）"]).sort((a,b)=>a-b);
-      q3Value = pops[Math.floor(0.75*pops.length)];
-      safeTotal = meshesIn.filter(f=>f.properties["T001142001_人口（総数）"]<q3Value).length;
+      q3Value=pops[Math.floor(0.75*pops.length)];
+      safeTotal=meshesIn.filter(f=>f.properties["T001142001_人口（総数）"]<q3Value).length;
       updateRemainingDisplay();
-      // GeoJSON 保存
-      municipalityMeshes = { type:"FeatureCollection", features: meshesIn.map((f,i)=>{
-        f.id = i; return f;
-      })};
-      // レイヤー追加
+      municipalityMeshes={ type:"FeatureCollection", features: meshesIn.map((f,i)=>(f.id=i,f)) };
       addMeshLayer();
     }
     
-    // メッシュクリック
+    // クリック処理
     function handleMeshClick(e){
       if(gameOver||!e.features.length) return;
       const f=e.features[0], id=f.id;
@@ -219,11 +182,12 @@
     
     // リセット
     document.getElementById('resetBtn').addEventListener('click',startGame);
-    // ベースマップ切替（状態保持）
+    
+    // **切替時：addMeshLayer を先に登録してから setStyle**
     document.getElementById('toggleBasemap').addEventListener('click',()=>{
+      map.once('style.load', addMeshLayer);
       currentBasemapIndex = (currentBasemapIndex+1) % baseMaps.length;
       map.setStyle(baseMaps[currentBasemapIndex]);
-      map.once('style.load', addMeshLayer);
     });
     
     // 初期ロード
