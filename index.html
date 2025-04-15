@@ -10,44 +10,117 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
+  
     gtag('config', 'G-HK2ZMH65Q0');
   </script>
-  <!-- MapLibre GL JS -->
+  <!-- MapLibre GL JS の読み込み -->
   <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
-  <!-- Turf.js -->
+  <!-- Turf.js の読み込み -->
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
   <style>
-    html, body { height:100%; margin:0; padding:0; }
-    #map { position:absolute; top:0; bottom:0; width:100%; }
+    /* html, body に高さを指定 */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    /* 地図表示領域 */
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+    /* 上部パネル */
     #topPanel {
-      position:absolute; top:10px; left:10px; z-index:10;
-      background:rgba(255,255,255,0.9); padding:10px; border-radius:5px;
-      font-family:sans-serif;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      transition: background 1s;
     }
-    #topPanel button { margin:5px 5px 0 0; }
-    #title { font-weight:bold; font-size:18px; margin-bottom:5px; }
-    #instruction { font-size:14px; color:#333; margin-bottom:5px; }
-    #remaining { margin-top:5px; font-weight:bold; color:#333; }
+    #topPanel button {
+      margin-top: 5px;
+      margin-right: 5px;
+    }
+    /* タイトル */
+    #title {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 5px;
+    }
+    /* 指示文 */
+    #instruction {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    /* 残りメッシュ数表示 */
+    #remaining {
+      margin-top: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+    /* シェアポップアップ */
     #sharePopup {
-      display:none; position:fixed; top:50%; left:50%;
-      transform:translate(-50%,-50%); background:white; padding:20px;
-      border:2px solid #ccc; z-index:1000; box-shadow:0 4px 10px rgba(0,0,0,0.3);
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border: 2px solid #ccc;
+      z-index: 1000;
+      box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
     }
-    #sharePopup button { margin-right:5px; }
+    #sharePopup button {
+      margin-right: 5px;
+    }
+    /* オーバーレイ */
     #overlay {
-      display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-      background:rgba(0,0,0,0.4); z-index:900;
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      z-index: 900;
     }
-    #creator { margin-top:10px; font-size:14px; color:#333; }
-    #creator a { text-decoration:none; color:#333; }
+    /* 作成者表示（上部パネル内、リセットボタンの下に表示） */
+    #creator {
+      margin-top: 10px;
+      font-family: sans-serif;
+      font-size: 14px;
+      color: #333;
+    }
+    #creator a {
+      text-decoration: none;
+      color: #333;
+    }
+    /* 右下の著作権表示（常に表示、背景付き） */
     #attribution {
-      position:fixed; bottom:10px; right:10px; font-size:12px; color:#fff;
-      background:rgba(0,0,0,0.5); padding:5px 8px; border-radius:3px; z-index:1001;
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      font-family: sans-serif;
+      font-size: 12px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 8px;
+      border-radius: 3px;
+      z-index: 1001;
     }
   </style>
 </head>
 <body>
+  <!-- 上部パネル：タイトル、指示文、スコア・残りメッシュ数・リセット・作成者表示 -->
   <div id="topPanel">
     <div id="title">250mesh Guardian</div>
     <div id="instruction">
@@ -56,149 +129,258 @@
     <div id="score">Score: 0</div>
     <div id="remaining">Remaining: 0</div>
     <button id="resetBtn">Reset</button>
-    <button id="toggleBasemap">地図切替</button>
+    <!-- 作成者表示 -->
     <div id="creator">
       作成者：<a href="https://x.com/GISPHN" target="_blank">GISPHN</a><br>
       データ：行政区域(国土数値情報)、250mメッシュ(e-Stat2020年国勢調査)
     </div>
-    <div id="gameMessage" style="margin-top:5px;font-weight:bold;color:red;"></div>
+    <div id="gameMessage" style="margin-top:5px; font-weight:bold; color:red;"></div>
   </div>
   
+  <!-- 地図表示領域 -->
   <div id="map"></div>
+  
+  <!-- オーバーレイ（シェアポップアップ背景） -->
   <div id="overlay"></div>
+  
+  <!-- シェアポップアップ（ゲーム終了時に自動表示） -->
   <div id="sharePopup">
-    <div id="shareMessage" style="margin-bottom:10px;"></div>
+    <div id="shareMessage" style="margin-bottom: 10px;"></div>
     <button id="popupShareBtn">Share on X</button>
     <button id="popupCloseBtn">Close</button>
   </div>
-  <div id="attribution">MapLibre | © OpenMapTiles © OpenStreetMap contributors</div>
+  
+  <!-- 右下の著作権表示（常に表示） -->
+  <div id="attribution">
+    MapLibre | © OpenMapTiles © OpenStreetMap contributors
+  </div>
   
   <script>
-    // ベースマップ定義
-    const baseMaps = [
-      "https://tile.openstreetmap.jp/styles/osm-bright/style.json",
-      {
-        version: 8,
-        sources: {
-          "gsi-tiles": {
-            type: "raster",
-            tiles: ["https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"],
-            tileSize: 256,
-            attribution: "© <a href='https://www.gsi.go.jp/'>GSI</a>"
-          }
-        },
-        layers: [{
-          id: "gsi-tiles", type: "raster", source: "gsi-tiles", minzoom:0, maxzoom:18
-        }]
-      }
-    ];
-    let currentBasemapIndex = 0;
-    
-    // マップ初期化
+    /**********************
+     * 背景地図設定
+     **********************/
     const map = new maplibregl.Map({
       container: 'map',
-      style: baseMaps[currentBasemapIndex],
-      center: [139.6917,35.6895],
+      style: 'https://tile.openstreetmap.jp/styles/osm-bright/style.json',
+      center: [139.6917, 35.6895],
       zoom: 10
     });
     
-    // グローバルステート
-    let municipalityData, meshData;
-    let score=0, gameOver=false, q3Value=0, safeTotal=0, safeClickedCount=0;
-    let municipalityMeshes, currentMunicipality;
-    const clickedIds = new Set();
-    
-    // UI 更新関数省略（前回と同じ）...
-    function updateScoreDisplay(){ document.getElementById('score').innerText='Score: '+score; }
-    function updateRemainingDisplay(){ document.getElementById('remaining').innerText='Remaining: '+(safeTotal-safeClickedCount); }
-    function celebrate(){ const p=document.getElementById('topPanel'); p.style.background="gold"; setTimeout(()=>p.style.background="rgba(255,255,255,0.9)",1000); }
-    function shareOnX(){ let msg=document.getElementById('gameMessage').innerText||`250mesh Guardian: Score ${score}`; window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(msg+" #250meshGuardian"),"_blank"); }
-    function showSharePopup(msg){ document.getElementById('shareMessage').innerText=msg; document.getElementById('overlay').style.display='block'; document.getElementById('sharePopup').style.display='block'; }
-    function hideSharePopup(){ document.getElementById('sharePopup').style.display='none'; document.getElementById('overlay').style.display='none'; }
-    document.getElementById('popupShareBtn').addEventListener('click',shareOnX);
-    document.getElementById('popupCloseBtn').addEventListener('click',hideSharePopup);
-    
-    // メッシュレイヤー追加
-    function addMeshLayer(){
-      map.addSource('meshes',{ type:'geojson', data: municipalityMeshes });
-      map.addLayer({
-        id:'meshes-layer', type:'fill', source:'meshes',
-        paint:{
-          'fill-color':['case',['boolean',['feature-state','safeClicked'],false],'rgba(128,128,128,0)','rgba(128,128,128,0.5)'],
-          'fill-outline-color':'rgba(0,0,0,0.5)'
-        }
-      });
-      clickedIds.forEach(id=> map.setFeatureState({ source:'meshes', id },{ safeClicked:true }) );
-      if(!gameOver) map.on('click','meshes-layer',handleMeshClick);
-      map.on('mouseenter','meshes-layer',()=>map.getCanvas().style.cursor='pointer');
-      map.on('mouseleave','meshes-layer',()=>map.getCanvas().style.cursor='');
+    /**********************
+     * ゲーム用グローバル変数
+     **********************/
+    let municipalityData = null;
+    let meshData = null;
+    let score = 0;
+    let gameOver = false;
+    let q3Value = 0;
+    let currentMunicipality = null;
+    let municipalityMeshes = null;
+    let safeTotal = 0;        // 安全な（クリック可能な）メッシュ数＝全メッシュ数から、第3四分位数以上のメッシュ数を引いた数
+    let safeClickedCount = 0; // クリック済みの安全メッシュ数
+
+    /**********************
+     * 表示更新関数
+     **********************/
+    function updateScoreDisplay() {
+      document.getElementById('score').innerText = 'Score: ' + score;
     }
-    
-    // ゲーム開始
-    function startGame(){
-      if(map.getLayer('meshes-layer')){
-        map.off('click','meshes-layer',handleMeshClick);
+    function updateRemainingDisplay() {
+      const remaining = safeTotal - safeClickedCount;
+      document.getElementById('remaining').innerText = 'Remaining: ' + remaining;
+    }
+
+    /**********************
+     * お祝いアクション
+     **********************/
+    function celebrate() {
+      const topPanel = document.getElementById('topPanel');
+      topPanel.style.background = "gold";
+      setTimeout(() => {
+        topPanel.style.background = "rgba(255,255,255,0.9)";
+      }, 1000);
+    }
+
+    /**********************
+     * シェア処理（X用）
+     **********************/
+    function shareOnX() {
+      let message = document.getElementById("gameMessage").innerText;
+      if (!message) {
+        message = "250mesh Guardian: Score " + score;
+      }
+      const shareUrl = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(message + " #250meshGuardian");
+      window.open(shareUrl, "_blank");
+    }
+
+    /**********************
+     * シェアポップアップ制御
+     **********************/
+    function showSharePopup(message) {
+      document.getElementById('shareMessage').innerText = message;
+      document.getElementById('overlay').style.display = 'block';
+      document.getElementById('sharePopup').style.display = 'block';
+    }
+    function hideSharePopup() {
+      document.getElementById('sharePopup').style.display = 'none';
+      document.getElementById('overlay').style.display = 'none';
+    }
+    document.getElementById('popupShareBtn').addEventListener('click', shareOnX);
+    document.getElementById('popupCloseBtn').addEventListener('click', hideSharePopup);
+
+    /**********************
+     * ゲーム開始／リセット処理
+     **********************/
+    function startGame() {
+      // 既存のカスタムレイヤーがあれば削除
+      if (map.getLayer('meshes-layer')) {
+        map.off('click', 'meshes-layer', handleMeshClick);
         map.removeLayer('meshes-layer');
+      }
+      if (map.getSource('meshes')) {
         map.removeSource('meshes');
       }
-      gameOver=false; score=0; safeClickedCount=0; clickedIds.clear();
-      updateScoreDisplay(); document.getElementById('gameMessage').innerText="";
+      
+      gameOver = false;
+      score = 0;
+      safeClickedCount = 0;
+      updateScoreDisplay();
+      document.getElementById('gameMessage').innerText = "";
       hideSharePopup();
-      const fts=municipalityData.features;
-      currentMunicipality=fts[Math.floor(Math.random()*fts.length)];
-      map.fitBounds(turf.bbox(currentMunicipality),{padding:20});
-      const meshesIn=meshData.features.filter(f=> turf.booleanPointInPolygon(turf.centroid(f),currentMunicipality) );
-      const pops=meshesIn.map(f=>f.properties["T001142001_人口（総数）"]).sort((a,b)=>a-b);
-      q3Value=pops[Math.floor(0.75*pops.length)];
-      safeTotal=meshesIn.filter(f=>f.properties["T001142001_人口（総数）"]<q3Value).length;
+      
+      // 自治体データからランダムに1件選択
+      const features = municipalityData.features;
+      currentMunicipality = features[Math.floor(Math.random() * features.length)];
+      console.log("選択された自治体:", currentMunicipality.properties.name);
+      
+      // 自治体境界に合わせてマップ表示範囲調整
+      const bbox = turf.bbox(currentMunicipality);
+      map.fitBounds(bbox, { padding: 20 });
+      
+      // 人口データ内のメッシュから、自治体内のものを抽出（重心判定）
+      const meshesInMunicipality = meshData.features.filter(feature => {
+        const centroid = turf.centroid(feature).geometry.coordinates;
+        return turf.booleanPointInPolygon(centroid, currentMunicipality);
+      });
+      if (meshesInMunicipality.length === 0) {
+        console.error("選択された自治体内にメッシュがありません");
+        return;
+      }
+      
+      // 第3四分位数（75パーセンタイル）の計算  
+      // ※ メッシュ人口は "T001142001_人口（総数）" プロパティを使用
+      const populations = meshesInMunicipality.map(f => f.properties["T001142001_人口（総数）"]);
+      populations.sort((a, b) => a - b);
+      const q3Index = Math.floor(0.75 * populations.length);
+      q3Value = populations[q3Index];
+      console.log('第3四分位数の人口:', q3Value);
+      
+      // 安全なメッシュ数は、全メッシュ数から「第3四分位数以上」のメッシュ数を引いた数
+      safeTotal = meshesInMunicipality.filter(f => f.properties["T001142001_人口（総数）"] < q3Value).length;
+      console.log('クリック可能な安全メッシュ数:', safeTotal);
       updateRemainingDisplay();
-      municipalityMeshes={ type:"FeatureCollection", features: meshesIn.map((f,i)=>(f.id=i,f)) };
-      addMeshLayer();
+      
+      // 抽出したメッシュを GeoJSON としてまとめる
+      municipalityMeshes = {
+        "type": "FeatureCollection",
+        "features": meshesInMunicipality
+      };
+      // 各メッシュに一意な id を付与
+      municipalityMeshes.features.forEach((feature, i) => {
+        feature.id = i;
+      });
+      
+      // GeoJSON ソース追加
+      map.addSource('meshes', {
+        type: 'geojson',
+        data: municipalityMeshes
+      });
+      
+      // メッシュレイヤー追加
+      // 未クリック：半透明の灰色、クリック済み：透明
+      map.addLayer({
+        id: 'meshes-layer',
+        type: 'fill',
+        source: 'meshes',
+        layout: {},
+        paint: {
+          'fill-color': [
+            "case",
+            ["boolean", ["feature-state", "safeClicked"], false],
+            "rgba(128,128,128,0)",      // クリック済みなら透明
+            "rgba(128,128,128,0.5)"       // 未クリックは半透明の灰色
+          ],
+          'fill-outline-color': 'rgba(0,0,0,0.5)'
+        }
+      });
+      
+      // クリックイベントのバインド
+      map.on('click', 'meshes-layer', handleMeshClick);
+      map.on('mouseenter', 'meshes-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'meshes-layer', () => { map.getCanvas().style.cursor = ''; });
     }
-    
-    // クリック処理
-    function handleMeshClick(e){
-      if(gameOver||!e.features.length) return;
-      const f=e.features[0], id=f.id;
-      if(clickedIds.has(id)) return;
-      const pop=f.properties["T001142001_人口（総数）"];
-      if(pop>=q3Value){
-        const rem=safeTotal-safeClickedCount;
-        document.getElementById('gameMessage').innerText=`ゲームオーバー！第3四分位数以上のメッシュをクリックしました。残り：${rem}`;
-        gameOver=true; map.off('click','meshes-layer',handleMeshClick);
+
+    /**********************
+     * メッシュクリック時の処理
+     **********************/
+    function handleMeshClick(e) {
+      if (gameOver) return;
+      if (!e.features || e.features.length === 0) return;
+      
+      const clickedFeature = e.features[0];
+      const state = map.getFeatureState({ source: 'meshes', id: clickedFeature.id });
+      if (state && state.safeClicked) return;
+      
+      const pop = clickedFeature.properties["T001142001_人口（総数）"];
+      console.log("クリックされたメッシュの人口:", pop);
+      
+      if (pop >= q3Value) {
+        // 第3四分位数以上のメッシュをクリック → ゲームオーバー
+        const remainingSafe = safeTotal - safeClickedCount;
+        document.getElementById('gameMessage').innerText =
+          'ゲームオーバー！第3四分位数以上のメッシュをクリックしました。残り：' + remainingSafe;
+        gameOver = true;
+        map.off('click', 'meshes-layer', handleMeshClick);
         showSharePopup(document.getElementById('gameMessage').innerText);
       } else {
-        clickedIds.add(id);
-        map.setFeatureState({ source:'meshes', id },{ safeClicked:true });
-        score++; safeClickedCount++;
-        updateScoreDisplay(); updateRemainingDisplay();
-        if(safeClickedCount>=safeTotal){
-          document.getElementById('gameMessage').innerText='クリア!!';
-          gameOver=true; map.off('click','meshes-layer',handleMeshClick);
-          celebrate(); showSharePopup(document.getElementById('gameMessage').innerText);
+        // 安全なメッシュの場合
+        map.setFeatureState({ source: 'meshes', id: clickedFeature.id }, { safeClicked: true });
+        score++;
+        safeClickedCount++;
+        updateScoreDisplay();
+        updateRemainingDisplay();
+        if (safeClickedCount >= safeTotal) {
+          document.getElementById('gameMessage').innerText = 'クリア!!';
+          gameOver = true;
+          map.off('click', 'meshes-layer', handleMeshClick);
+          celebrate();
+          showSharePopup(document.getElementById('gameMessage').innerText);
         }
       }
     }
-    
-    // リセット
-    document.getElementById('resetBtn').addEventListener('click',startGame);
-    
-    // **切替時：addMeshLayer を先に登録してから setStyle**
-    document.getElementById('toggleBasemap').addEventListener('click',()=>{
-      map.once('style.load', addMeshLayer);
-      currentBasemapIndex = (currentBasemapIndex+1) % baseMaps.length;
-      map.setStyle(baseMaps[currentBasemapIndex]);
+
+    /**********************
+     * リセットボタン処理
+     **********************/
+    document.getElementById('resetBtn').addEventListener('click', function(){
+      map.off('click', 'meshes-layer', handleMeshClick);
+      if (map.getLayer('meshes-layer')) { map.removeLayer('meshes-layer'); }
+      if (map.getSource('meshes')) { map.removeSource('meshes'); }
+      startGame();
     });
-    
-    // 初期ロード
-    map.on('load',()=>{
+
+    /**********************
+     * マップ読み込み後、自治体・メッシュデータ取得＆ゲーム開始
+     **********************/
+    map.on('load', function() {
       Promise.all([
-        fetch('municipalities.geojson').then(r=>r.json()),
-        fetch('pop_Osakacity_yodogawku.geojson').then(r=>r.json())
-      ]).then(([mun,mesh])=>{
-        municipalityData=mun; meshData=mesh;
+        fetch('municipalities.geojson').then(res => res.json()),
+        fetch('pop_Osakacity_yodogawku.geojson').then(res => res.json())
+      ]).then(results => {
+        municipalityData = results[0];
+        meshData = results[1];
         startGame();
-      }).catch(console.error);
+      }).catch(err => console.error("データ読み込みエラー:", err));
     });
   </script>
 </body>
